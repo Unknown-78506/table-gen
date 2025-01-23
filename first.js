@@ -33,7 +33,7 @@ function createTableItem(tableText, index) {
 
   nextBtn.addEventListener("click", function () {
     const uniqueIdentifier = `table-${index}`;
-    window.location.href = `index.html?table=${encodeURIComponent(uniqueIdentifier)}`;
+    window.location.href = `first.html?table=${encodeURIComponent(uniqueIdentifier)}`;
   });
 }
 
