@@ -1,37 +1,314 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Table-Genrator</title>
-    <link href='https://fonts.googleapis.com/css?family=Muli' rel='stylesheet'>
-    <link rel="stylesheet" href="first.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Table Management</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button, select, input[type="text"] {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    button:hover, select:hover, input:hover {
+      background-color: #f0f0f0;
+    }
+    #table-field > div {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid black;
+      border-radius: 10px;
+    }
+    table {
+      width: 100%;
+      margin: 10px 0;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #d1ecf1;
+      cursor: pointer;
+    }
+    td[contenteditable="true"] {
+      background-color: #fff3cd;
+    }
+  </style>
 </head>
 <body>
-    <header>
-    <div>
-        <nav>
-            <ul id="nav-bar">
-                <strong id="logo">Table-Creator</strong>
-                <li>Home</li>
-                <li>About us</li>
-                <li>Contact us</li>
-            </ul>
-            <!-- <strong id="firstline">GENERATE TABLE AS YOU LIKE</strong>
-            <p id="secondline">with Unlimited Column and Rows</p> -->
-        </nav> 
-    </div>
-</header>
-    <section>
-        <div id="table-creator">
-            <div id="list">
-            <input type="text" name="creator" id="addtable" placeholder="Enter Your Table Name">
-            <button id="add">Add</button>
-        </div>
-            <label for="Tables">Tables :-</label>
-            <div id="listoftable"></div>
-        </div>
-    </section>
-    <script src="first.js"></script>
+  <div id="controls">
+    <button id="section">Add Section</button>
+    <button id="row">Add Row</button>
+    <button id="column">Add Column</button>
+    <button id="delete-row">Delete Row</button>
+    <button id="delete-column">Delete Column</button>
+    <button id="delete-section">Delete Section</button>
+    <button id="save">Save</button>
+    <select id="section-selector">
+      <option value="">Select Section</option>
+    </select>
+    <input type="text" id="search" placeholder="Search...">
+    <button id="search-button">Search</button>
+    <button id="download-csv">Download CSV</button>
+  </div>
+  <div id="table-field"></div>
+
+  <script>
+    const sectionButton = document.getElementById("section");
+    const rowButton = document.getElementById("row");
+    const columnButton = document.getElementById("column");
+    const deleteRowButton = document.getElementById("delete-row");
+    const deleteColumnButton = document.getElementById("delete-column");
+    const deleteSectionButton = document.getElementById("delete-section");
+    const saveButton = document.getElementById("save");
+    const sectionSelector = document.getElementById("section-selector");
+    const searchField = document.getElementById("search");
+    const searchButton = document.getElementById("search-button");
+    const tableField = document.getElementById("table-field");
+
+    let sections = JSON.parse(localStorage.getItem("sections")) || [];
+
+    window.onload = () => {
+      sections.forEach((section) => createSection(section, true));
+      updateSectionSelector();
+    };
+
+    sectionButton.addEventListener("click", () => {
+      const sectionName = prompt("Enter Section Name:");
+      if (!sectionName || sectionName.trim() === "") {
+        alert("Invalid section name!");
+        return;
+      }
+      if (sections.includes(sectionName)) {
+        alert("Section already exists!");
+        return;
+      }
+      sections.push(sectionName);
+      localStorage.setItem("sections", JSON.stringify(sections));
+      createSection(sectionName);
+      updateSectionSelector();
+    });
+
+    rowButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+      const table = document.querySelector(`#section-${section} table`);
+      const columns = table.rows[0]?.cells.length || 1;
+
+      const row = document.createElement("tr");
+      for (let j = 0; j < columns; j++) {
+        const cell = document.createElement("td");
+        cell.contentEditable = "true";
+        row.appendChild(cell);
+      }
+      table.appendChild(row);
+    });
+
+    columnButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+
+      const table = document.querySelector(`#section-${section} table`);
+      Array.from(table.rows).forEach((row) => {
+        const cell = document.createElement("td");
+        cell.contentEditable = "true";
+        row.appendChild(cell);
+      });
+
+      if (table.rows.length === 0) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.contentEditable = "true";
+        row.appendChild(cell);
+        table.appendChild(row);
+      }
+    });
+
+    deleteRowButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+
+      const table = document.querySelector(`#section-${section} table`);
+      if (table.rows.length > 0) {
+        table.deleteRow(table.rows.length - 1);
+      }
+    });
+
+    deleteColumnButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+
+      const table = document.querySelector(`#section-${section} table`);
+      Array.from(table.rows).forEach((row) => {
+        if (row.cells.length > 0) {
+          row.deleteCell(row.cells.length - 1);
+        }
+      });
+    });
+
+    deleteSectionButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+
+      const confirmDelete = confirm(`Are you sure you want to delete the section "${section}"?`);
+      if (!confirmDelete) return;
+
+      const sectionDiv = document.getElementById(`section-${section}`);
+      if (sectionDiv) sectionDiv.remove();
+
+      sections = sections.filter((sec) => sec !== section);
+      localStorage.removeItem(`table-${section}`);
+      localStorage.setItem("sections", JSON.stringify(sections));
+      updateSectionSelector();
+    });
+
+    saveButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+      saveTable(section);
+      alert("Table saved successfully!");
+    });
+
+    searchButton.addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+      const searchTerm = searchField.value.trim();
+      if (searchTerm === "") return;
+
+      const table = document.querySelector(`#section-${section} table`);
+      Array.from(table.rows).forEach(row => {
+        Array.from(row.cells).forEach(cell => {
+          const cellText = cell.textContent;
+          if (cellText.includes(searchTerm)) {
+            const highlightedText = cellText.replace(new RegExp(searchTerm, 'g'), `<span class="bold">${searchTerm}</span>`);
+            cell.innerHTML = highlightedText;
+          }
+        });
+      });
+    });
+
+    function createSection(name, isFromStorage = false) {
+      const sectionDiv = document.createElement("div");
+      sectionDiv.id = `section-${name}`;
+      sectionDiv.innerHTML = `<h3>${name}</h3><table><tr><th onclick="sortByHeader('${name}', 0)">Header 1</th><th onclick="sortByHeader('${name}', 1)">Header 2</th></tr></table>`;
+      tableField.appendChild(sectionDiv);
+
+      if (isFromStorage) loadTable(name);
+    }
+
+    function getActiveSection() {
+      const section = sectionSelector.value;
+      if (!section) {
+        alert("Please select a section!");
+        return null;
+      }
+      return section;
+    }
+
+    function saveTable(section) {
+      const table = document.querySelector(`#section-${section} table`);
+      const tableData = Array.from(table.rows).map((row) =>
+        Array.from(row.cells).map((cell) => cell.textContent)
+      );
+      localStorage.setItem(`table-${section}`, JSON.stringify(tableData));
+    }
+
+    function loadTable(section) {
+      const tableData = JSON.parse(localStorage.getItem(`table-${section}`));
+      if (!tableData) return;
+
+      const table = document.querySelector(`#section-${section} table`);
+      tableData.forEach((rowData) => {
+        const row = document.createElement("tr");
+        rowData.forEach((cellData) => {
+          const cell = document.createElement("td");
+          cell.contentEditable = "true";
+          cell.textContent = cellData;
+          row.appendChild(cell);
+        });
+        table.appendChild(row);
+      });
+    }
+
+    function sortByHeader(section, index) {
+      const table = document.querySelector(`#section-${section} table`);
+      const rows = Array.from(table.rows).slice(1);
+      rows.sort((a, b) => {
+        const aValue = a.cells[index].textContent;
+        const bValue = b.cells[index].textContent;
+        return aValue.localeCompare(bValue); // Sort in ascending order
+      });
+      rows.forEach(row => table.appendChild(row));
+    }
+
+    function updateSectionSelector() {
+      sectionSelector.innerHTML = '<option value="">Select Section</option>';
+      sections.forEach((section) => {
+        const option = document.createElement("option");
+        option.value = section;
+        option.textContent = section;
+        sectionSelector.appendChild(option);
+      });
+    }
+
+    // Show only the selected section
+    sectionSelector.addEventListener("change", () => {
+      const selectedSection = sectionSelector.value;
+      const allSections = document.querySelectorAll("#table-field > div");
+
+      allSections.forEach(sectionDiv => {
+        if (sectionDiv.id === `section-${selectedSection}` || selectedSection === "") {
+          sectionDiv.style.display = "block"; // Show selected section
+        } else {
+          sectionDiv.style.display = "none"; // Hide other sections
+        }
+      });
+    });
+
+    // Download table as CSV
+    document.getElementById("download-csv").addEventListener("click", () => {
+      const section = getActiveSection();
+      if (!section) return;
+
+      const table = document.querySelector(`#section-${section} table`);
+      const rows = Array.from(table.rows);
+
+      if (rows.length === 0) {
+        alert("No data available in the table to download.");
+        return;
+      }
+
+      const csvData = rows.map(row => {
+        const cells = Array.from(row.cells);
+        return cells.map(cell => `"${cell.textContent}"`).join(","); // Escape text for CSV
+      }).join("\n");
+
+      const blob = new Blob([csvData], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+
+      a.href = url;
+      a.download = `${section}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
 </body>
 </html>
